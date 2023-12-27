@@ -240,26 +240,35 @@ async def start(client, message):
             await asyncio.sleep(1) 
         return await sts.delete()
 
-    elif data.split("-", 1)[0] == "verify":
-        userid = data.split("-", 2)[1]
-        token = data.split("-", 3)[2]
-        if str(message.from_user.id) != str(userid):
-            return await message.reply_text(
-                text="<b>Invalid link or Expired link !</b>",
-                protect_content=True
-            )
-        is_valid = await check_token(client, userid, token)
-        if is_valid == True:
-            await message.reply_text(
-                text=f"<b>Hey {message.from_user.mention}, You are successfully verified !.</b>",
-                protect_content=True
-            )
-            await verify_user(client, userid, token)
+     if mc.startswith('verify'):
+        _, token = mc.split("_", 1)
+        verify_status = await get_verify_status(message.from_user.id)
+        if verify_status['verify_token'] != token:
+            return await message.reply("Your verify token is invalid.")
+        await update_verify_status(message.from_user.id, is_verified=True, verified_time=time.time())
+        if verify_status["link"] == "":
+            reply_markup = None
         else:
-            return await message.reply_text(
-                text="<b>Invalid link or Expired link !</b>",
-                protect_content=True
-            )
+            btn = [[
+                InlineKeyboardButton("📌 Get File 📌", url=f'https://t.me/{temp.U_NAME}?start={verify_status["link"]}')
+            ]]
+            reply_markup = InlineKeyboardMarkup(btn)
+        await message.reply(f"✅ You successfully verified until: {get_readable_time(VERIFY_EXPIRE)}", reply_markup=reply_markup, protect_content=True)
+        return
+    
+    verify_status = await get_verify_status(message.from_user.id)
+    if IS_VERIFY and not verify_status['is_verified']:
+        token = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+        await update_verify_status(message.from_user.id, verify_token=token, link="" if mc == 'inline_verify' else mc)
+        link = await get_shortlink(SHORTLINK_URL, SHORTLINK_API, f'https://t.me/{temp.U_NAME}?start=verify_{token}')
+        btn = [[
+            InlineKeyboardButton("🧿 Verify 🧿", url=link)
+        ],[
+            InlineKeyboardButton('🗳 Tutorial 🗳', url=VERIFY_TUTORIAL)
+        ]]
+        await message.reply("You not verified today! Kindly verify now. 🔐", reply_markup=InlineKeyboardMarkup(btn), protect_content=True)
+        return
+    )
     if data.startswith("sendfiles"):
         chat_id = int("-" + file_id.split("-")[1])
         userid = message.from_user.id if message.from_user else None
